@@ -1,0 +1,71 @@
+version: "3.3"
+
+volumes:
+  nextcloud:
+  nextcloud_db:
+
+services:
+  nextcloud_db:
+    image: mariadb   # I run on latest... actually 10.5 works great, upgrades are ok
+    container_name: "nextcloud_db"
+    command: --transaction-isolation=READ-COMMITTED --binlog-format=ROW
+    restart: always
+    volumes:
+      - nextcloud_db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=PLEASE_CHANGE_MY_PASSWORD_NOW!
+      - MYSQL_PASSWORD=PLEASE_CHANGE_MY_PASSWORD_NOW!
+      - MYSQL_DATABASE=nextcloud
+      - MYSQL_USER=nextcloud
+    networks:
+      - backend
+    logging:
+      options:
+        max-size: '50m'
+        max-file: '5'
+      driver: json-file
+
+
+  app:
+    image: nextcloud   # same here, I run on latest
+    links:
+      - nextcloud_db
+    volumes:
+      - ./nextcloud:/var/www/html # access to your files
+    restart: always
+    container_name: "nextcloud_app"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.port=80"
+      - "traefik.docker.network=traefik_proxy"
+      # Entrypoint and TLS
+      # I put the label athecloud for the fun, just be consistent between names
+      - "traefik.http.routers.athecloud.entrypoints=websecure"
+      - "traefik.http.routers.athecloud.rule=Host(`ADD_YOUR_DOMAIN.COM`)"
+      - "traefik.http.routers.athecloud.tls.certresolver=mytlschallenge" # let's encrypt, consistent with the traefik docker-compose file
+      # Middlewares for calendars & security purposes:
+      - "traefik.http.routers.athecloud.middlewares=athecloud@docker,athecloud-dav@docker"
+      # Middleware cloud adds additional headers:
+      - "traefik.http.middlewares.athecloud.headers.customFrameOptionsValue=SAMEORIGIN"
+      - "traefik.http.middlewares.athecloud.headers.framedeny=true"
+      - "traefik.http.middlewares.athecloud.headers.sslredirect=true"
+      - "traefik.http.middlewares.athecloud.headers.stsPreload=true"
+      - "traefik.http.middlewares.athecloud.headers.stsSeconds=15552000"
+      # Middleware cloud-dav replaces .well-known paths for caldav and carddav with proper nextcloud path
+      - "traefik.frontend.redirect.permanent=true"
+      - "traefik.http.middlewares.athecloud-dav.replacepathregex.regex=^/.well-known/ca(l|rd)dav"
+      - "traefik.http.middlewares.athecloud-dav.replacepathregex.replacement=/remote.php/dav/"
+    networks:
+      - traefik_proxy
+      - backend
+    logging:
+      options:
+        max-size: '50m'
+        max-file: '5'
+      driver: json-file
+
+networks:
+  traefik_proxy: # this is the network provided by traefik
+    external:
+      name: traefik_proxy
+  backend: # your database should be in this network
