@@ -17,16 +17,21 @@ docker-compose up -d
 
 Repeat into nextcloud directory.
 
-## Ensure PHP.ini configuration:
+## Ensure PHP configuration:
 in your /var/www/html/config/config.php
 add the following :
-
+~~~~
   'trusted_domains' => 
   array (
     0 => 'YOUR_DOMAIN.COM',
   ),
+    'trusted_proxies' =>
+  array (
+    0 => '192.168.32.0/16',
+    1 => '127.0.0.0/16',
+  ),
   'overwriteprotocol' => 'https',
   'overwrite.cli.url' => 'https://YOUR_DOMAIN.COM',
-  
+  ~~~~
   
 That's it :)
